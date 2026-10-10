@@ -1,0 +1,555 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CRM Sales Management API",
+    "version": "1.0.0",
+    "description": "RESTful backend for lead-to-deal CRM sales management. Authenticate with JWT Bearer tokens. Passwords are never returned."
+  },
+  "servers": [{ "url": "http://localhost:5000", "description": "Local" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "details": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "pageSize": { "type": "integer" },
+          "total": { "type": "integer" },
+          "totalPages": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Users" },
+    { "name": "Leads" },
+    { "name": "Customers" },
+    { "name": "Deals" },
+    { "name": "Activities" },
+    { "name": "Timeline" },
+    { "name": "Dashboard" },
+    { "name": "Settings" }
+  ],
+  "paths": {
+    "/": {
+      "get": { "tags": ["Health"], "summary": "API info", "responses": { "200": { "description": "OK" } } }
+    },
+    "/api/health": {
+      "get": { "tags": ["Health"], "summary": "Health check", "responses": { "200": { "description": "Healthy" }, "503": { "description": "Database down" } } }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a Sales Executive",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Registered" }, "409": { "description": "Email exists" } }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "JWT issued" }, "401": { "description": "Invalid credentials" } }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Logout (invalidate token version)",
+        "responses": { "200": { "description": "Logged out" } }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Current user profile",
+        "responses": { "200": { "description": "Profile" } }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "List users (Admin all, Manager team)",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "role", "in": "query", "schema": { "type": "string" } },
+          { "name": "isActive", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "sortBy", "in": "query", "schema": { "type": "string" } },
+          { "name": "sortOrder", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"] } }
+        ],
+        "responses": { "200": { "description": "Users" } }
+      },
+      "post": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Create user (Admin)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password", "role"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "password": { "type": "string" },
+                  "role": { "type": "string", "enum": ["Admin", "Sales Manager", "Sales Executive"] },
+                  "reportsTo": { "type": "string" },
+                  "isActive": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Get user",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "User" } }
+      },
+      "patch": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Update user (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Delete user (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/api/users/{id}/status": {
+      "patch": {
+        "tags": ["Users"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Activate or deactivate user",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["isActive"], "properties": { "isActive": { "type": "boolean" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/leads": {
+      "get": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "List leads with search, filters, pagination",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "priority", "in": "query", "schema": { "type": "string" } },
+          { "name": "source", "in": "query", "schema": { "type": "string" } },
+          { "name": "assignedTo", "in": "query", "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "sortBy", "in": "query", "schema": { "type": "string" } },
+          { "name": "sortOrder", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Leads" } }
+      },
+      "post": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Create lead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "source"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "company": { "type": "string" },
+                  "source": { "type": "string", "enum": ["Website", "Referral", "Social Media", "Email", "Phone", "Other"] },
+                  "status": { "type": "string" },
+                  "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+                  "assignedTo": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/leads/{id}": {
+      "get": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Lead" } }
+      },
+      "patch": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Delete lead (Admin/Manager)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/api/leads/{id}/status": {
+      "patch": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/leads/{id}/assign": {
+      "patch": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Assign/reassign lead (Admin/Manager)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["assignedTo"], "properties": { "assignedTo": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Assigned" } }
+      }
+    },
+    "/api/leads/{id}/convert": {
+      "post": {
+        "tags": ["Leads"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Convert qualified lead to customer + deal (transaction)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["dealValue", "expectedClosingDate"],
+                "properties": {
+                  "dealValue": { "type": "number" },
+                  "probability": { "type": "number" },
+                  "expectedClosingDate": { "type": "string", "format": "date-time" },
+                  "dealName": { "type": "string" },
+                  "address": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Converted" }, "400": { "description": "Not eligible" } }
+      }
+    },
+    "/api/customers": {
+      "get": {
+        "tags": ["Customers"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "List customers",
+        "responses": { "200": { "description": "Customers" } }
+      },
+      "post": {
+        "tags": ["Customers"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Create customer",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/customers/{id}": {
+      "get": {
+        "tags": ["Customers"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Customer" } }
+      },
+      "patch": {
+        "tags": ["Customers"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Customers"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Delete customer (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/api/deals": {
+      "get": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "List deals (stage, amount, closing date filters)",
+        "parameters": [
+          { "name": "stage", "in": "query", "schema": { "type": "string" } },
+          { "name": "assignedTo", "in": "query", "schema": { "type": "string" } },
+          { "name": "minAmount", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxAmount", "in": "query", "schema": { "type": "number" } },
+          { "name": "closingFrom", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "closingTo", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "Deals" } }
+      },
+      "post": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Create deal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "customer", "value", "expectedClosingDate"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "customer": { "type": "string" },
+                  "lead": { "type": "string" },
+                  "value": { "type": "number" },
+                  "probability": { "type": "number" },
+                  "expectedClosingDate": { "type": "string", "format": "date-time" },
+                  "stage": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/deals/{id}": {
+      "get": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deal" } }
+      },
+      "patch": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/api/deals/{id}/stage": {
+      "patch": {
+        "tags": ["Deals"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Change deal stage (Won/Lost business rules enforced)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["stage"],
+                "properties": {
+                  "stage": { "type": "string", "enum": ["Qualification", "Discovery", "Proposal", "Negotiation", "Won", "Lost"] },
+                  "lostReason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/api/activities": {
+      "get": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "List activities (Overdue is computed from dueDate)",
+        "responses": { "200": { "description": "Activities" } }
+      },
+      "post": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Create activity / follow-up / note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type", "title"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["Call", "Email", "Meeting", "Demo", "Follow-up", "Reminder", "Note"] },
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "assignedTo": { "type": "string" },
+                  "dueDate": { "type": "string", "format": "date-time" },
+                  "relatedTo": {
+                    "type": "object",
+                    "properties": {
+                      "entityType": { "type": "string", "enum": ["Lead", "Customer", "Deal"] },
+                      "entityId": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/activities/{id}": {
+      "get": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Activity" } }
+      },
+      "patch": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Updated" } }
+      },
+      "delete": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/api/activities/{id}/complete": {
+      "patch": {
+        "tags": ["Activities"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Completed" } }
+      }
+    },
+    "/api/timeline/{entityType}/{entityId}": {
+      "get": {
+        "tags": ["Timeline"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Audit timeline for a lead, customer, or deal",
+        "parameters": [
+          { "name": "entityType", "in": "path", "required": true, "schema": { "type": "string", "enum": ["Lead", "Customer", "Deal", "User", "Activity"] } },
+          { "name": "entityId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Timeline" } }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Sales statistics for the current user's scope",
+        "responses": { "200": { "description": "Summary metrics" } }
+      }
+    },
+    "/api/dashboard/pipeline": {
+      "get": {
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Deal counts and value by stage",
+        "responses": { "200": { "description": "Pipeline" } }
+      }
+    },
+    "/api/dashboard/team": {
+      "get": {
+        "tags": ["Dashboard"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Team performance (Admin/Manager)",
+        "responses": { "200": { "description": "Team stats" } }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": ["Settings"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Get CRM configuration",
+        "responses": { "200": { "description": "Settings" } }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Update CRM configuration (Admin)",
+        "responses": { "200": { "description": "Updated" } }
+      }
+    }
+  }
+}
