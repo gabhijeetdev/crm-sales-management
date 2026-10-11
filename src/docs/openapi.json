@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "description": "RESTful backend for lead-to-deal CRM sales management. Authenticate with JWT Bearer tokens. Passwords are never returned."
   },
-  "servers": [{ "url": "http://localhost:5000", "description": "Local" }],
+  "servers": [{ "url": "/", "description": "Current server" }],
   "components": {
     "securitySchemes": {
       "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }

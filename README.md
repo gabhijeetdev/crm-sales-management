@@ -1,11 +1,21 @@
 # CRM Sales Management API
 
-RESTful backend for a CRM sales process: lead generation → qualification → customer conversion → deal management → closure.
+## Project overview
 
-No frontend is required. Interactive API docs are served at `/api/docs`.
+RESTful backend for a CRM sales process: lead generation → qualification → customer conversion → deal management → closure. No frontend is included.
+
+What it provides:
+- JWT authentication and role-based access control (Admin, Sales Manager, Sales Executive)
+- User, lead, customer, deal and activity management with search, filtering, sorting, date ranges and pagination
+- Lead assignment and safe lead → customer → deal conversion (MongoDB transaction)
+- Deal stage rules enforced by the backend (not trusted from the client)
+- Activities/follow-ups with server-computed overdue status
+- Timeline / audit history for leads, customers and deals
+- Dashboard, sales pipeline and team-performance analytics
+- Centralized error handling, input validation (Zod), rate limiting, CORS and security headers
 
 ## Links
-- **GitHub repository:** https://github.com/YOUR_USERNAME/YOUR_REPO
+- **GitHub repository:** https://github.com/gabhijeetdev/crm-sales-management
 - **API docs (Swagger UI):** `http://localhost:5000/api/docs` (locally) — `<LIVE_URL>/api/docs` once deployed
 - **Live deployment:** _not deployed — run locally using the steps below_ (replace with the URL if you deploy)
 
@@ -40,7 +50,7 @@ cp .env.example .env
 ## Run the server
 ```bash
 npm run create-admin   
-npm run dev            
+npm run dev           
 npm start
 ```
 
@@ -70,6 +80,12 @@ Create privileged users with `npm run create-admin` or `POST /api/users` as an A
 | **Sales Executive** | Only records assigned to them. Create/update own leads, customers, deals, and activities. Convert assigned qualified leads. |
 
 Executives cannot change assignments. Inactive users cannot log in and cannot be assigned work.
+
+## API documentation
+- **Swagger / OpenAPI UI:** `/api/docs` (every route, request body, query parameters, responses and error codes)
+- **Raw OpenAPI JSON:** `/api/docs.json` (can be imported into Postman: Import → Link/File)
+- **Protected routes:** all routes except `/api/health`, `/api/auth/register` and `/api/auth/login` require `Authorization: Bearer <token>`. In Swagger, log in via `POST /api/auth/login`, copy the token, click **Authorize**, and paste it.
+- Sample requests and responses are in [Sample requests](#sample-requests).
 
 ## API overview
 | Area | Base path |
@@ -219,7 +235,7 @@ Errors follow:
 An end-to-end smoke test (about 80 checks: auth, RBAC, assignment, conversion, deal rules, activities, timeline, dashboard) is included. With the server running and an Admin created:
 ```bash
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=yourpassword npm run smoke
-
+# optional: BASE_URL=https://your-deployed-url npm run smoke
 ```
 
 ## Important business rules
@@ -234,12 +250,68 @@ ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=yourpassword npm run smoke
 - Users who still have assigned leads/customers/deals/activities or team members cannot be hard-deleted (409); deactivate them instead.
 - Assignment is recorded on the timeline. Only active Sales Executives can receive leads.
 
-## Database design and indexes
-Collections: `users`, `leads`, `customers`, `deals`, `activities`, `timelines`, `settings`.
+## Database design
 
-Relationships use ObjectId references (not embedding) so lists stay paginated and independently queryable.
+MongoDB (Mongoose). Seven collections. Relationships use **ObjectId references**, not embedding, so every list stays paginated and independently queryable.
 
-Indexed fields include user email/role/active, lead status/source/assignedTo/createdAt, customer email/assignedTo, deal stage/assignedTo/closing date/value, activity dueDate/status, and timeline entityType+entityId.
+```
+User ─┬─< Lead ──(convert)──> Customer ──1:N──> Deal
+      │     │                      │               │
+      │     └── Deal.lead ─────────┴── Deal.customer
+      ├─< Activity ──> relatedTo: Lead | Customer | Deal
+      └─< Timeline  ──> entityType + entityId (+ relatedEntities[])
+```
+
+### users
+| Field | Type | Notes |
+| --- | --- | --- |
+| name, phone | String | |
+| email | String | unique, lowercase |
+| password | String | bcrypt hash, `select: false`, never returned |
+| role | Enum | Admin / Sales Manager / Sales Executive |
+| isActive | Boolean | inactive users cannot log in or be assigned work |
+| reportsTo | ObjectId → User | a Sales Executive's manager (defines the team) |
+| tokenVersion | Number | incremented on logout/deactivation to invalidate JWTs |
+
+### leads
+| Field | Type | Notes |
+| --- | --- | --- |
+| name, email, phone, company, description | String | |
+| source | Enum | Website, Referral, Social Media, Email, Phone, Other |
+| status | Enum | New, Contacted, Qualified, Unqualified, Converted, Lost |
+| priority | Enum | Low, Medium, High |
+| assignedTo | ObjectId → User | |
+| convertedAt, convertedCustomer, convertedDeal | Date / ObjectId | set on conversion |
+
+### customers
+name, email, phone, company, address, `lead` → Lead (**unique, sparse**: one customer per lead), `assignedTo` → User, `status` (Active/Inactive).
+
+### deals
+name, `lead` → Lead, `customer` → Customer, `assignedTo` → User, `value`, `probability` (0–100), `expectedRevenue` (**computed server-side**), `expectedClosingDate`, `stage` (Qualification, Discovery, Proposal, Negotiation, Won, Lost), `lostReason`, `closedAt`, description.
+
+### activities
+`type` (Call, Email, Meeting, Demo, Follow-up, Reminder, Note), title, description, `assignedTo` → User, `createdBy` → User, `dueDate`, `status` (stored: Pending/Completed; **Overdue is derived** when Pending and past due), `completedAt`, `relatedTo { entityType, entityId }`.
+
+### timelines (audit log)
+`action`, `entityType` + `entityId`, `performedBy` → User, `previousValue`, `newValue`, `relatedEntities[]` (so a deal event also shows on its customer and lead timeline), createdAt.
+
+### settings
+companyName, currency, timezone, fiscalYearStartMonth (single CRM-configuration document).
+
+### Indexes
+| Collection | Indexes | Why |
+| --- | --- | --- |
+| users | `email` (unique), `role+isActive`, `reportsTo` | login, user filters, team lookup |
+| leads | `status`, `priority`, `source`, `assignedTo+status`, `email`, `createdAt` | list filters, role scoping, date range |
+| customers | `email`, `assignedTo+status`, `lead` (unique sparse), `createdAt` | filters and conversion uniqueness |
+| deals | `stage`, `assignedTo+stage`, `customer`, `lead`, `expectedClosingDate`, `value`, `createdAt` | stage/amount/closing-date filters, pipeline aggregation |
+| activities | `dueDate+status`, `assignedTo`, `relatedTo.entityType+entityId`, `createdAt` | overdue/pending queries, per-entity lists |
+| timelines | `entityType+entityId+createdAt` | fetch history of one lead/customer/deal, newest first |
+
+Other decisions:
+- Dashboard numbers use MongoDB aggregation (`$group`) and `countDocuments`, run in parallel with `Promise.all`.
+- List endpoints use `.lean()` where documents are not modified, and paginate with `skip/limit` plus a parallel `countDocuments`.
+- Lead conversion runs in a **MongoDB transaction** (customer + deal + lead update + timeline), so a failure leaves no partial data. Transactions require a replica set (Atlas provides this).
 
 ## Assumptions
 - A Sales Manager’s team is the set of executives with `reportsTo` pointing at that manager.
