@@ -14,10 +14,10 @@ What it provides:
 - Dashboard, sales pipeline and team-performance analytics
 - Centralized error handling, input validation (Zod), rate limiting, CORS and security headers
 
-## Links
-- **GitHub repository:** https://github.com/gabhijeetdev/crm-sales-management
-- **API docs (Swagger UI):** `http://localhost:5000/api/docs` (locally) — `<LIVE_URL>/api/docs` once deployed
-- **Live deployment:** _not deployed — run locally using the steps below_ (replace with the URL if you deploy)
+   ## Links
+   - GitHub: https://github.com/gabhijeetdev/crm-sales-management
+   - API docs (Swagger): http://localhost:5000/api/docs (when running locally)
+   - Live deployment: not deployed – run locally using the steps below
 
 ## Technologies
 - Node.js 20+ and Express 5
