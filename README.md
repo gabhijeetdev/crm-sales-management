@@ -122,10 +122,10 @@ Pagination metadata:
 ```json
 POST /api/auth/register
 {
-  "name": "Priya Shah",
-  "email": "priya@example.com",
+  "name": "Abhijeet",
+  "email": "abhi@example.com",
   "phone": "+91 9000000000",
-  "password": "ChangeThisPassword123"
+  "password": "Password123"
 }
 ```
 
@@ -136,7 +136,7 @@ Authorization: Bearer <token>
 {
   "name": "Amit Kumar",
   "email": "amit@acme.com",
-  "phone": "+91 9876543210",
+  "phone": "+91 955555555",
   "company": "Acme Ltd",
   "source": "Website",
   "priority": "High",
